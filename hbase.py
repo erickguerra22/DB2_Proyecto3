@@ -500,9 +500,9 @@ class HBase:
         
         
         
-hbase = HBase()
-# hbase.getData('tabla2','123',['cf_2:name'])
-print(hbase.getData('tabla2','123'))
+# hbase = HBase()
+# # hbase.getData('tabla2','123',['cf_2:name'])
+# print(hbase.getData('tabla2','123'))
         
 
 
