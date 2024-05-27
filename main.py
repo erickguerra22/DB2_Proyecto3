@@ -45,7 +45,7 @@ class CmdEmulator:
         try:
             pasted_text = self.root.clipboard_get()
             self.output_text.insert(tk.INSERT, pasted_text)
-            self.chars += len(pasted_text) -1
+            self.chars += len(pasted_text)
         except tk.TclError:
             pass  # Handle empty clipboard or other errors
         return "break"
@@ -54,6 +54,7 @@ class CmdEmulator:
         try:
             selected_text = self.output_text.get(tk.SEL_FIRST, tk.SEL_LAST)
             self.chars -= len(selected_text) + 2
+            self.chars = max(self.chars, 0)
             self.output_text.delete(tk.SEL_FIRST, tk.SEL_LAST)
         except tk.TclError:
             pass  # Handle empty clipboard or other errors
@@ -109,7 +110,7 @@ class CmdEmulator:
             
         elif event.keysym in ["Left", "Right"]:
             return
-        else:
+        elif event.char:
             self.chars += 1
 
     def on_enter(self, event):
