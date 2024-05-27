@@ -31,7 +31,7 @@ class HBase:
         if current_namespace not in self.metadata:
             return '\033[91mNamespaceNotFoundException: El namespace especificado no existe.\033[0m'
         
-        tables = [(namespace,t,atributes['families'],atributes['enabled']) for namespace,tables in self.metadata.items() for t,atributes in tables.items() if namespace == current_namespace and t == name]
+        tables = [(namespace,t,atributes['families'],atributes['enabled'],atributes['region']) for namespace,tables in self.metadata.items() for t,atributes in tables.items() if namespace == current_namespace and t == name]
         return tables[0] if len(tables) > 0 else (current_namespace,name)
 
     def readMetadata(self):
@@ -56,7 +56,7 @@ class HBase:
         os.makedirs(namespace_path, exist_ok=True)
         return f'\033[95m0 \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'            
 
-    def createTable(self, name, columnFamilies):
+    def createTable(self, name, columnFamilies, embedded = False):
         inicio = time()
         result = ''
         
@@ -65,23 +65,23 @@ class HBase:
         else: current_namespace = 'default'
 
         if current_namespace == '':
-            return '\033[91mError: Debe especificar el namespace.\033[0m'
+            return '\033[91mError: Debe especificar el namespace.\033[0m' if not embedded else False
         
         if name == '':
-            return '\033[91mError: Debe especificar el nombre de la tabla.\033[0m'
+            return '\033[91mError: Debe especificar el nombre de la tabla.\033[0m' if not embedded else False
 
         if current_namespace not in self.metadata:
-            return '\033[91mNamespaceNotFoundException: El namespace especificado no existe.\033[0m'
+            return '\033[91mNamespaceNotFoundException: El namespace especificado no existe.\033[0m' if not embedded else False
         
         if not len(columnFamilies):
-            return '\033[91mError: Debe especificar al menos una column family.\033[0m'
+            return '\033[91mError: Debe especificar al menos una column family.\033[0m' if not embedded else False
         
         tables = self.metadata[current_namespace]
 
         if name in tables:
-            return f"\033[91mTableExistsException: La tabla '{name}' ya existe dentro del namespace {current_namespace}\033[0m"
+            return f"\033[91mTableExistsException: La tabla '{name}' ya existe dentro del namespace {current_namespace}\033[0m" if not embedded else False
         
-        tables[name] = {'families': columnFamilies, 'enabled':True}
+        tables[name] = {'families': columnFamilies, 'enabled':True, 'region': len(self.metadata[current_namespace])}
         self.writeMetadata()
 
         table_path = os.path.join(f'namespaces/{current_namespace}', name)
@@ -89,7 +89,7 @@ class HBase:
         
         result += f'\033[95m0 \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds\n'
         result += f'=> \033[91mHbase::Table\033[0m - {name}'
-        return result
+        return result if not embedded else True
 
     def listTables(self, param=None):
         inicio = time()
@@ -323,15 +323,15 @@ class HBase:
         for t in tables:
             result += f"Disabling table {current_namespace}:{t}\n"
             counter += 1
-            if not self.disableTable(t,embedded=True):
-                result += f"Couldn't disable {current_namespace}:{t}\n"
+            if not self.disableTable(f'{current_namespace}:{t}',embedded=True):
+                result += f"\033[91mCouldn't disable {current_namespace}:{t}\033[0m\n"
                 counter -= 1
         
         for t in tables:
             counter += 1
             result += f"Dropping table {current_namespace}:{t}\n"
-            if not self.dropTable(t,embedded=True):
-                result += f"Couldn't drop {current_namespace}:{t}\n"
+            if not self.dropTable(f'{current_namespace}:{t}',embedded=True):
+                result += f"\033[91mCouldn't drop {current_namespace}:{t}\033[0m\n"
                 counter -= 1
 
         result += f'\033[95m{counter} \033[96mtable\033[0m(s) dropped in \033[95m{round(time() - inicio,6)} \033[0mseconds'
@@ -392,18 +392,19 @@ class HBase:
             with open(file_path, 'r') as f:
                 hfile = json.load(f)
                 
-        if 'data' in hfile.keys() and len(hfile['data']) > 50:
-            fileName = f'HFile_{files+1}.json'
-            file_path = os.path.join(table_path, fileName)
-            hfile['data'] = {}
-            hfile['metadata']['creation_time'] = datetime.now().isoformat()
+        # if 'data' in hfile.keys() and len(hfile['data']) > 50:
+        #     fileName = f'HFile_{files+1}.json'
+        #     file_path = os.path.join(table_path, fileName)
+        #     hfile['data'] = {}
+        #     hfile['metadata']['creation_time'] = datetime.now().isoformat()
 
         if 'metadata' not in hfile.keys():
             hfile['metadata'] = {
                 'table_name': table[1],
                 'enabled': True,
                 'column_families': table[2],
-                'creation_time': datetime.now().isoformat()
+                'creation_time': datetime.now().isoformat(),
+                'region': table[4]
                 }
             
         timestamp = datetime.now().timestamp()
@@ -482,8 +483,11 @@ class HBase:
                         for column in columns.keys()
                     }
                 for c in result.keys():
-                    result[c] = r[rowId][c[0]][c[1]]
-            continue
+                    if c[1] in r[rowId][c[0]].keys():
+                        result[c] = r[rowId][c[0]][c[1]]
+                    else:
+                        result[c] = {}
+                continue
     
         headers = ['\033[94mCOLUMN','\033[95mCELL\033[0m']
         
@@ -495,17 +499,203 @@ class HBase:
                 
         resultMessage += tabulate(data, headers=headers, tablefmt="plain")
         resultMessage += '\n'
-        resultMessage += f'\033[95m{rowCounter} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
+        resultMessage += f'\n\033[95m{rowCounter} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
+        return resultMessage
+    
+    def scanData(self, table):
+        resultMessage=''
+        inicio = time()
+        table = self.verifyTable(table)
+        result = {}
+
+        if not isinstance(table,tuple):
+            return table
+
+        if len(table) == 2:
+            return f"\033[91mTableNotFoundException: La tabla '{table[1]}' no existe en el namespace '{table[0]}'\033[0m"
+        
+        if not table[3]:
+            return f"\033[91mTableDisabledException: La tabla '{table[1]}' está deshabilitada.\033[0m"
+            
+        rows = []
+        
+        table_path = os.path.join(f'namespaces/{table[0]}', table[1])
+        files = glob.glob(os.path.join(table_path, "*"))
+        for file_path in files:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    hfile = json.load(f)
+                    if 'data' in hfile.keys():
+                        rows.append(hfile['data'])
+                        
+        rowCounter = 0
+        
+        for r in rows:
+            for rowId, families in r.items():
+                for family, columns in families.items():
+                    for column, info in columns.items():
+                        result[(rowId,f'{family}:{column}')] = info
+    
+        headers = ['\033[95mROW','\033[94mCOLUMN\033[0m+CELL']
+        
+        data = []
+        for r in result.items():
+            for v in r[1].items():
+                data.append([r[0][0],f'\033[94mcolumn\033[0m={r[0][1]} \033[95mtimestamp\033[0m=\033[95m{v[0]} \033[94mvalue\033[0m={v[1]}'])
+                rowCounter += 1
+                
+        resultMessage += tabulate(data, headers=headers, tablefmt="plain")
+        resultMessage += '\n'
+        resultMessage += f'\n\033[95m{rowCounter} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
         return resultMessage
         
         
+    def deleteRow(self, name, rowId, column, timestamp):
+        inicio = time()
+        table = self.verifyTable(name)
+
+        if not isinstance(table,tuple):
+            return table
+
+        if len(table) == 2:
+            return f"\033[91mTableNotFoundException: La tabla '{table[1]}' no existe en el namespace '{table[0]}'\033[0m"
         
-# hbase = HBase()
-# # hbase.getData('tabla2','123',['cf_2:name'])
-# print(hbase.getData('tabla2','123'))
+        if not table[3]:
+            return f"\033[91mTableDisabledException: La tabla '{table[1]}' está deshabilitada.\033[0m"
         
+        if ':' not in column:
+            return f"\033[91mError: Debe especificar el column family al que pertenece la columna\033[0m"
+        
+        cf, column = column.split(':')
 
+        if cf not in table[2]:
+            return f"\033[91mFamilyNotFoundException: La familia '{cf}' no existe en la tabla '{table[1]}'\033[0m"
+        
+        hfiles = {}
+        
+        table_path = os.path.join(f'namespaces/{table[0]}', table[1])
+        files = glob.glob(os.path.join(table_path, "*"))
+        for file_path in files:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    hfile = json.load(f)
+                    if 'data' in hfile.keys():
+                        hfiles[file_path] = hfile
+                        
+        for file_path, hfile in hfiles.items():
+            r = hfile['data']
+            if rowId in r.keys():
+                try:
+                    del r[rowId][cf][column][timestamp]
+                    with open(file_path, 'w') as f:
+                        json.dump(hfile, f, indent=2)
+                except:
+                    return f'\033[95m{0} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'            
+            continue
+        return f'\033[95m{1} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
+    
+    def deleteAll(self, name, rowId):
+        inicio = time()
+        table = self.verifyTable(name)
 
+        if not isinstance(table,tuple):
+            return table
 
+        if len(table) == 2:
+            return f"\033[91mTableNotFoundException: La tabla '{table[1]}' no existe en el namespace '{table[0]}'\033[0m"
+        
+        if not table[3]:
+            return f"\033[91mTableDisabledException: La tabla '{table[1]}' está deshabilitada.\033[0m"
+        
+        hfiles = {}
+        
+        table_path = os.path.join(f'namespaces/{table[0]}', table[1])
+        files = glob.glob(os.path.join(table_path, "*"))
+        for file_path in files:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    hfile = json.load(f)
+                    if 'data' in hfile.keys():
+                        hfiles[file_path] = hfile
 
+        rows = 0                        
+        for file_path, hfile in hfiles.items():
+            r = hfile['data']
+            if rowId in r.keys():
+                rows = 0
+                for _, columns in r[rowId].items():
+                    for col in columns.items():
+                        rows += len(col[1])
+                    # rows += len(columns)
+                r[rowId] = {}
+                with open(file_path, 'w') as f:
+                        json.dump(hfile, f, indent=2)
+            continue
+        
+        return f'\033[95m{rows} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
+    
+    def countRows(self, name, embedded=False):
+        inicio = time()
+        table = self.verifyTable(name)
 
+        if not isinstance(table,tuple):
+            return table
+
+        if len(table) == 2:
+            return f"\033[91mTableNotFoundException: La tabla '{table[1]}' no existe en el namespace '{table[0]}'\033[0m" if not embedded else None
+        
+        if not table[3]:
+            return f"\033[91mTableDisabledException: La tabla '{table[1]}' está deshabilitada.\033[0m" if not embedded else None
+        
+        hfiles = {}
+        
+        table_path = os.path.join(f'namespaces/{table[0]}', table[1])
+        files = glob.glob(os.path.join(table_path, "*"))
+        for file_path in files:
+            if os.path.exists(file_path):
+                with open(file_path, 'r') as f:
+                    hfile = json.load(f)
+                    if 'data' in hfile.keys():
+                        hfiles[file_path] = hfile
+
+        rows = 0                        
+        for file_path, hfile in hfiles.items():
+            r = hfile['data']
+            for rowId in r.keys():
+                for _, columns in r[rowId].items():
+                    for col in columns.items():
+                        rows += len(col[1])
+        
+        return f'\033[95m{rows} \033[96mrow\033[0m(s)\033[0m' if not embedded else rows
+    
+    def truncateTable(self,name):
+        inicio = time()
+        table = self.verifyTable(name)
+        result = f"Truncating '{table[1]}' table (it may take a while):\n"
+
+        if not isinstance(table,tuple):
+            return table
+
+        if len(table) == 2:
+            return f"\033[91mTableNotFoundException: La tabla '{table[1]}' no existe en el namespace '{table[0]}'\033[0m"
+        
+        rows = self.countRows(table[1], embedded=True)
+        if rows == None:
+            return f"\033[91mCouldn't count {table[0]}:{table[1]} rows\033[0m\n"
+        
+        result += "   - Disabling table...\n"
+        
+        if not self.disableTable(f'{table[0]}:{table[1]}',embedded=True):
+            return f"\033[91mCouldn't disable {table[0]}:{table[1]}\033[0m\n"
+            
+        result += "   - Truncating table...\n"
+        if not self.dropTable(f'{table[0]}:{table[1]}',embedded=True):
+            return f"\033[91mCouldn't truncate {table[0]}:{table[1]}\033[0m\n"
+            
+        if not self.createTable(table[1],table[2],embedded=True):
+            return f"\033[91mCouldn't truncate {table[0]}:{table[1]}\033[0m\n"
+            
+        result += f'     \033[95m{rows} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
+        
+        return result
+        

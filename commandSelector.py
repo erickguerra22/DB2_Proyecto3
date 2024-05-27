@@ -41,6 +41,19 @@ def commandSelector(hbase,command):
             return hbase.describeTable(parts[1])
         elif command == 'put':
             return hbase.putRow(parts[1], parts[2], parts[3], parts[4],)
+        elif command == 'get':
+            families = parts[3:] if len(parts) > 3 else None
+            return hbase.getData(parts[1], parts[2], families)
+        elif command == 'scan':
+            return hbase.scanData(parts[1])
+        elif command == 'delete':
+            return hbase.deleteRow(parts[1], parts[2], parts[3], parts[4])
+        elif command == 'deleteall':
+            return hbase.deleteAll(parts[1], parts[2])
+        elif command == 'count':
+            return hbase.countRows(parts[1])
+        elif command == 'truncate':
+            return hbase.truncateTable(parts[1])
         else:
             return f"\033[91mError: El comando {parts[0]} no es válido\033[0m"
         
