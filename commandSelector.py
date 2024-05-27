@@ -62,4 +62,4 @@ def commandSelector(hbase,command):
         
     except Exception as e:
         print(e)
-        return f"\033[91mError: Parámetros insuficientes\033[0m"
+        return f"\033[91mError: Parámetros insuficientes\033[0m\nUtiliza 'help' para más información."

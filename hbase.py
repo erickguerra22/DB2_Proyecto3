@@ -722,8 +722,7 @@ class HBase:
                 "delete <namespace>?:<table_name> <row_Id> <column_family>:<column> <timestamp>":"Elimina la fila que coincida con todos los parámetros. Si no se especifica el namespace, se tomará el namespace 'default'.",
                 "deleteall <namespace>?:<table_name> <row_Id>":"Elimina todas las filas con el row_Id indicado. Si no se especifica el namespace, se tomará el namespace 'default'.",
                 "count <namespace>?:<table_name>": "Cuenta la cantidad de filas en la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "truncate <namespace>?:<table_name>": "Elimina todo el contenido de la tabla, manteniendo la estructura básica. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "help": "Devuelve información sobre cada comando disponible."
+                "truncate <namespace>?:<table_name>": "Elimina todo el contenido de la tabla, manteniendo la estructura básica. Si no se especifica el namespace, se tomará el namespace 'default'."
             }
         }
         
