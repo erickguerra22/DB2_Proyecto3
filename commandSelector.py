@@ -58,8 +58,7 @@ def commandSelector(hbase,command):
             instruction = parts[1] if len(parts) > 1 else None
             return hbase.getHelp(instruction)
         else:
-            return f"\033[91mError: El comando {parts[0]} no es reconocido\033[0m"
+            return f"\033[91mError: El comando {parts[0]} no es reconocido\033[0m\nUtiliza 'help' para más información."
         
     except Exception as e:
-        print(e)
-        return f"\033[91mError: Parámetros insuficientes\033[0m\nUtiliza 'help' para más información."
+        return f"\033[91mError: Parámetros insuficientes\033[0m"

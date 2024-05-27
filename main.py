@@ -24,6 +24,8 @@ class CmdEmulator:
         self.root = root
         root.title("HBase CLI")
         root.configure(bg="black")
+        self.history = []
+        self.history_pointer = -1
 
         self.output_text = tk.Text(root, height=25, width=110, padx=10, pady=10,
                                     bg="black", fg="white", insertbackground="white", font=("Consolas", 11), undo=True, selectbackground='white',
@@ -55,7 +57,7 @@ class CmdEmulator:
             self.output_text.delete(tk.SEL_FIRST, tk.SEL_LAST)
         except tk.TclError:
             pass  # Handle empty clipboard or other errors
-        return "break"
+        return
         
     def on_key(self, event):
         if event.keysym == "BackSpace":
@@ -70,7 +72,42 @@ class CmdEmulator:
         elif event.keysym == "Return":
             self.on_enter(event)
             return "break"
-        elif event.keysym in ["Left", "Right", "Up", "Down"]:
+        elif event.keysym == "Up":
+            self.history_pointer += 1
+
+            if self.history_pointer >= len(self.history):
+                self.history_pointer = len(self.history) - 1
+                return "break"
+
+            current = self.output_text.index(tk.INSERT)
+            self.output_text.delete(f'{current}-{self.chars}c', current)
+            command = self.history[self.history_pointer]
+            self.output_text.insert(tk.END, command)
+
+            self.chars = len(command)
+            return "break"
+        
+        elif event.keysym == "Down":
+            self.history_pointer -= 1
+            
+            if self.history_pointer < -1:
+                self.history_pointer = -1
+                return "break"
+
+            current = self.output_text.index(tk.INSERT)
+            self.output_text.delete(f'{current}-{self.chars}c', current)
+
+            if self.history_pointer == -1:
+                self.chars = 0
+                return "break"
+
+            command = self.history[self.history_pointer]
+            self.output_text.insert(tk.END, command)
+
+            self.chars = len(command)
+            return "break"
+            
+        elif event.keysym in ["Left", "Right"]:
             return
         else:
             self.chars += 1
@@ -82,6 +119,8 @@ class CmdEmulator:
             self.output_text.insert(tk.END, "\n")
             self.parse_ansi(self.prompt)
         else:    
+            self.history.insert(0,command)
+            self.history_pointer = -1
             self.execute_command(command)
         
     def execute_command(self, command):

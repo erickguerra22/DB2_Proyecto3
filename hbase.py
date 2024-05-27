@@ -40,6 +40,9 @@ class HBase:
                 self.metadata = json.load(f)
 
     def writeMetadata(self):
+        for namespace in self.metadata:
+            self.metadata[namespace] = {k: self.metadata[namespace][k] for k in sorted(self.metadata[namespace])}
+            
         with open(self.metadata_file, 'w') as f:
             json.dump(self.metadata, f, indent=4)
 
@@ -427,6 +430,8 @@ class HBase:
             
         if len(hfile['data'][rowId][cf][column]) == 3:
             hfile['data'][rowId][cf][column].popitem()
+            
+        hfile['data'] = {k: hfile['data'][k] for k in sorted(hfile['data'])}
 
         with open(file_path, 'w') as f:
             json.dump(hfile, f, indent=2)
@@ -743,7 +748,7 @@ class HBase:
         else:
             for c_type in helps.values():
                 for c in c_type.items():
-                    if command == c[0].split(' ')[0]: return c[1]
+                    if command == c[0].split(' ')[0]: return f'{c[0]}\n\n{c[1]}'
             return f"El comando '{command}' no es válido."
         
         return result
