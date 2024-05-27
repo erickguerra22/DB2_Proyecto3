@@ -1,4 +1,4 @@
-def commandSelector(hbase,command):
+def commandSelector(hbase,command):    
     if '{' in command:
         parts = command.split('{')
         parts = parts[0].strip().split(' ') + [f'{"{"}{parts[1]}']
@@ -54,8 +54,12 @@ def commandSelector(hbase,command):
             return hbase.countRows(parts[1])
         elif command == 'truncate':
             return hbase.truncateTable(parts[1])
+        elif command == 'help':
+            instruction = parts[1] if len(parts) > 1 else None
+            return hbase.getHelp(instruction)
         else:
-            return f"\033[91mError: El comando {parts[0]} no es válido\033[0m"
+            return f"\033[91mError: El comando {parts[0]} no es reconocido\033[0m"
         
-    except Exception:
+    except Exception as e:
+        print(e)
         return f"\033[91mError: Parámetros insuficientes\033[0m"

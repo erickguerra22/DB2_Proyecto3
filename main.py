@@ -26,7 +26,7 @@ class CmdEmulator:
         root.configure(bg="black")
 
         self.output_text = tk.Text(root, height=25, width=110, padx=10, pady=10,
-                                    bg="black", fg="white", insertbackground="white", font=("Consolas", 13), undo=True, selectbackground='white',
+                                    bg="black", fg="white", insertbackground="white", font=("Consolas", 11), undo=True, selectbackground='white',
                                     selectforeground='black')
         self.output_text.pack(fill=tk.BOTH, expand=True)
         self.output_text.insert(tk.END, self.prompt)

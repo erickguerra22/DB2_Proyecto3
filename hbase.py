@@ -698,4 +698,53 @@ class HBase:
         result += f'     \033[95m{rows} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
         
         return result
+    
+    def getHelp(self,command=None):
+        result = ''
+        helps = {
+            'DDL':{
+                'create_namespace <namespace>':"Crea un nuevo namespace en el directorio.",
+                'list_namespaces':"Lista todos los namespaces disponibles.",
+                'create <namespace>?:<table_name> [column_families]':"Crea una nueva tabla con los column families descritos en el namespace indicado. Si no se especifica ningún namespace, se utiliza el 'default'.",
+                'list [ <namespace>?:regex ]?':"Lista todas las tablas que coincidan con los parámetros dados. Si se especifica una regex, listará todas las tablas que coincidan. Si no se especifica el nombre del namespace, se buscará en el namespace 'default'.",
+                'disable <namespace>?:<table_name>':"Deshabilita la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                'enable <namespace>?:<table_name>':"Habilita la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                'is_enabled <namespace>?:<table_name>':"Verifica el estado de la tabla descrita. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "alter <namespace>?:<table_name> {NAME => <column_name>, [ METHOD => 'add' | 'delete' ]?}":"Modifica la tabla descrita. El método 'add' añade el column family a la tabla, mientras que el método 'delete' la elimina de la tabla, así como todos los registros asignados a ella. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "drop <namespace>?:<table_name>":"Elimina la tabla descrita y todo su contenido. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "drop_all [ <namespace>?:regex ]?":"Elimina todas las tablas que coincidan con los parámetros dados. Si se especifica una regex, eliminará las tablas que coincidan. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "describe <namespace>?:<table_name>":"Proporciona una breve descripción de la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'."
+            },
+            'DML':{
+                "put <namespace>?:<table_name> <row_Id> <column_family>:<column> <value>": "Crea un nuevo registro dentro de la tabla y columna indicadas, con el row_Id dado y el nuevo valor. Si ya hay un registro con esta combinación de <namespace>:<table_name> <row_Id> y <column_family>:<column>, se agregará un segundo valor como el más actualizado, manteniendo una copia de seguridad del antiguo. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "get <namespace>?:<table_name> <row_Id> [ <column_family>:<column> ]?":"Devuelve la fila que coincida con el row_id dado. Se pueden especificar las columnas que se deben devolver, con su column family respectivo. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "scan <namespace>?:<table_name>": "Devuelve todas las filas de la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "delete <namespace>?:<table_name> <row_Id> <column_family>:<column> <timestamp>":"Elimina la fila que coincida con todos los parámetros. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "deleteall <namespace>?:<table_name> <row_Id>":"Elimina todas las filas con el row_Id indicado. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "count <namespace>?:<table_name>": "Cuenta la cantidad de filas en la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "truncate <namespace>?:<table_name>": "Elimina todo el contenido de la tabla, manteniendo la estructura básica. Si no se especifica el namespace, se tomará el namespace 'default'.",
+                "help": "Devuelve información sobre cada comando disponible."
+            }
+        }
         
+        if not command:
+            result += f'Para obtener más información acerca de un comando específico, escriba HELP seguido del nombre de comando\n'
+            
+            headers = ['\033[32mCOMANDO\033[0m','\033[32mDESCRIPCIÓN\033[0m']
+            
+            for c_type in helps.items():
+                result += f'   {c_type[0]}:\n'
+                data = []
+                for c in c_type[1].items():
+                    data.append([f'\033[96m{c[0]}\033[0m',c[1].split('.')[0]+'.'])
+                    
+                result += tabulate(data, headers=headers, tablefmt="plain")
+                result += '\n'
+        
+        else:
+            for c_type in helps.values():
+                for c in c_type.items():
+                    if command == c[0].split(' ')[0]: return c[1]
+                return f"El comando '{command}' no es válido."
+        
+        return result
