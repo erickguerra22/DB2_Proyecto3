@@ -744,6 +744,6 @@ class HBase:
             for c_type in helps.values():
                 for c in c_type.items():
                     if command == c[0].split(' ')[0]: return c[1]
-                return f"El comando '{command}' no es válido."
+            return f"El comando '{command}' no es válido."
         
         return result
