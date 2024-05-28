@@ -40,12 +40,15 @@ def commandSelector(hbase,command):
         elif command == 'describe':
             return hbase.describeTable(parts[1])
         elif command == 'put':
-            return hbase.putRow(parts[1], parts[2], parts[3], parts[4],)
+            value = ' '.join(parts[4:])
+            return hbase.putRow(parts[1], parts[2], parts[3], value)
         elif command == 'get':
             families = parts[3:] if len(parts) > 3 else None
             return hbase.getData(parts[1], parts[2], families)
         elif command == 'scan':
-            return hbase.scanData(parts[1])
+            limit = int(parts[2]) if len(parts) > 2 else None
+            offset = int(parts[3]) if len(parts) > 3 else None
+            return hbase.scanData(parts[1], limit, offset)
         elif command == 'delete':
             return hbase.deleteRow(parts[1], parts[2], parts[3], parts[4])
         elif command == 'deleteall':
@@ -58,7 +61,8 @@ def commandSelector(hbase,command):
             instruction = parts[1] if len(parts) > 1 else None
             return hbase.getHelp(instruction)
         else:
-            return f"\033[91mError: El comando {parts[0]} no es reconocido\033[0m\nUtiliza 'help' para más información."
+            return hbase.getHelp(command)
         
     except Exception as e:
+        print(e)
         return f"\033[91mError: Parámetros insuficientes\033[0m"

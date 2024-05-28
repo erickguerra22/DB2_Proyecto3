@@ -1,0 +1,34 @@
+{
+    "default": {
+        "ordenes": {
+            "families": [
+                "info_orden"
+            ],
+            "enabled": true,
+            "region": 2
+        },
+        "productos": {
+            "families": [
+                "info_producto",
+                "info_stock"
+            ],
+            "enabled": true,
+            "region": 1
+        },
+        "usuarios": {
+            "families": [
+                "info_contacto",
+                "info_personal"
+            ],
+            "enabled": true,
+            "region": 0
+        },
+        "ventas": {
+            "families": [
+                "info_venta"
+            ],
+            "enabled": true,
+            "region": 3
+        }
+    }
+}

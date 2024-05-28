@@ -5,7 +5,9 @@ import glob
 import shutil
 import re
 from datetime import datetime
+import shutil
 from tabulate import tabulate
+import textwrap
 
 class HBase:
     def __init__(self):
@@ -23,10 +25,10 @@ class HBase:
         else: current_namespace = 'default'
 
         if current_namespace == '':
-            return '\033[91mError: Debe especificar el namespace.\033[0m'
+            return '\033[91mERROR: Debe especificar el namespace.\033[0m'
         
         if name == '':
-            return '\033[91mError: Debe especificar el nombre de la tabla.\033[0m'
+            return '\033[91mERROR: Debe especificar el nombre de la tabla.\033[0m'
 
         if current_namespace not in self.metadata:
             return '\033[91mNamespaceNotFoundException: El namespace especificado no existe.\033[0m'
@@ -68,16 +70,16 @@ class HBase:
         else: current_namespace = 'default'
 
         if current_namespace == '':
-            return '\033[91mError: Debe especificar el namespace.\033[0m' if not embedded else False
+            return '\033[91mERROR: Debe especificar el namespace.\033[0m' if not embedded else False
         
         if name == '':
-            return '\033[91mError: Debe especificar el nombre de la tabla.\033[0m' if not embedded else False
+            return '\033[91mERROR: Debe especificar el nombre de la tabla.\033[0m' if not embedded else False
 
         if current_namespace not in self.metadata:
             return '\033[91mNamespaceNotFoundException: El namespace especificado no existe.\033[0m' if not embedded else False
         
         if not len(columnFamilies):
-            return '\033[91mError: Debe especificar al menos una column family.\033[0m' if not embedded else False
+            return '\033[91mERROR: Debe especificar al menos una column family.\033[0m' if not embedded else False
         
         tables = self.metadata[current_namespace]
 
@@ -104,10 +106,10 @@ class HBase:
         else: current_namespace, regex = param.split(':')
 
         if current_namespace == '':
-            return '\033[91mError: Debe especificar el namespace.\033[0m'
+            return '\033[91mERROR: Debe especificar el namespace.\033[0m'
         
         if not regex:
-            return '\033[91mError: La expresión regular no es válida.\033[0m'
+            return '\033[91mERROR: La expresión regular no es válida.\033[0m'
         
         if current_namespace not in self.metadata:
             return '\033[91mNamespaceNotFoundException: El namespace especificado no existe.\033[0m'
@@ -306,10 +308,10 @@ class HBase:
         else: current_namespace, regex = param.split(':')
 
         if current_namespace == '':
-            return '\033[91mError: Debe especificar el namespace.\033[0m'
+            return '\033[91mERROR: Debe especificar el namespace.\033[0m'
         
         if not regex:
-            return '\033[91mError: La expresión regular no es válida.\033[0m'
+            return '\033[91mERROR: La expresión regular no es válida.\033[0m'
         
         if current_namespace not in self.metadata:
             return '\033[91mNamespaceNotFoundException: El namespace especificado no existe.\033[0m'
@@ -375,7 +377,7 @@ class HBase:
             return f"\033[91mTableDisabledException: La tabla '{table[1]}' está deshabilitada.\033[0m"
         
         if ':' not in col:
-            return f"\033[91mError: Debe especificar el column family al que pertenece la columna\033[0m"
+            return f"\033[91mERROR: Debe especificar el column family al que pertenece la columna\033[0m"
         
         cf, column = col.split(':')
 
@@ -457,7 +459,7 @@ class HBase:
         if cols:
             for col in cols:
                 if ':' not in col:
-                    return f"\033[91mError: Debe especificar el column family al que pertenece cada columna\033[0m"
+                    return f"\033[91mERROR: Debe especificar el column family al que pertenece cada columna\033[0m"
                 
                 cf, column = col.split(':')
 
@@ -507,7 +509,8 @@ class HBase:
         resultMessage += f'\n\033[95m{rowCounter} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
         return resultMessage
     
-    def scanData(self, table):
+    def scanData(self, table, limit, offset):
+        offset = 0 if offset is None else offset
         resultMessage=''
         inicio = time()
         table = self.verifyTable(table)
@@ -534,24 +537,38 @@ class HBase:
                         rows.append(hfile['data'])
                         
         rowCounter = 0
+        headers = ['\033[95mROW','\033[94mCOLUMN\033[0m+CELL']
+        data = []
         
         for r in rows:
             for rowId, families in r.items():
                 for family, columns in families.items():
                     for column, info in columns.items():
                         result[(rowId,f'{family}:{column}')] = info
+                        rowCounter += len(info)
     
-        headers = ['\033[95mROW','\033[94mCOLUMN\033[0m+CELL']
         
-        data = []
         for r in result.items():
             for v in r[1].items():
-                data.append([r[0][0],f'\033[94mcolumn\033[0m={r[0][1]} \033[95mtimestamp\033[0m=\033[95m{v[0]} \033[94mvalue\033[0m={v[1]}'])
-                rowCounter += 1
+                data.append([r[0][0],f'\033[94mcolumn\033[0m={r[0][1]} \033[95mtimestamp\033[0m=\033[95m{v[0]} \033[94mvalue\033[0m={v[1]}'])                
                 
+        if limit is None and len(data) and len(data) > 10:
+            data = data[offset:10+offset]
+            data.append(['.', '.'])
+            data.append(['.', '.'])
+            data.append(['.', '.'])
+        elif len(data) and limit:
+            data = data[offset:limit+offset]
+            
         resultMessage += tabulate(data, headers=headers, tablefmt="plain")
         resultMessage += '\n'
-        resultMessage += f'\n\033[95m{rowCounter} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
+        if limit is None and len(data) and len(data) > 10:
+            limit = 10
+            resultMessage += f'\n\033[93mWARNING:\033[0m {rowCounter - limit - offset} row(s) more'
+        elif not len(data): limit = 0
+        else: limit = 10
+            
+        resultMessage += f'\n\033[95m{min(limit, len(data))} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
         return resultMessage
         
         
@@ -569,7 +586,7 @@ class HBase:
             return f"\033[91mTableDisabledException: La tabla '{table[1]}' está deshabilitada.\033[0m"
         
         if ':' not in column:
-            return f"\033[91mError: Debe especificar el column family al que pertenece la columna\033[0m"
+            return f"\033[91mERROR: Debe especificar el column family al que pertenece la columna\033[0m"
         
         cf, column = column.split(':')
 
@@ -707,48 +724,52 @@ class HBase:
     def getHelp(self,command=None):
         result = ''
         helps = {
-            'DDL':{
-                'create_namespace <namespace>':"Crea un nuevo namespace en el directorio.",
-                'list_namespaces':"Lista todos los namespaces disponibles.",
-                'create <namespace>?:<table_name> [column_families]':"Crea una nueva tabla con los column families descritos en el namespace indicado. Si no se especifica ningún namespace, se utiliza el 'default'.",
-                'list [ <namespace>?:regex ]?':"Lista todas las tablas que coincidan con los parámetros dados. Si se especifica una regex, listará todas las tablas que coincidan. Si no se especifica el nombre del namespace, se buscará en el namespace 'default'.",
-                'disable <namespace>?:<table_name>':"Deshabilita la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                'enable <namespace>?:<table_name>':"Habilita la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                'is_enabled <namespace>?:<table_name>':"Verifica el estado de la tabla descrita. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "alter <namespace>?:<table_name> {NAME => <column_name>, [ METHOD => 'add' | 'delete' ]?}":"Modifica la tabla descrita. El método 'add' añade el column family a la tabla, mientras que el método 'delete' la elimina de la tabla, así como todos los registros asignados a ella. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "drop <namespace>?:<table_name>":"Elimina la tabla descrita y todo su contenido. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "drop_all [ <namespace>?:regex ]?":"Elimina todas las tablas que coincidan con los parámetros dados. Si se especifica una regex, eliminará las tablas que coincidan. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "describe <namespace>?:<table_name>":"Proporciona una breve descripción de la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'."
-            },
-            'DML':{
-                "put <namespace>?:<table_name> <row_Id> <column_family>:<column> <value>": "Crea un nuevo registro dentro de la tabla y columna indicadas, con el row_Id dado y el nuevo valor. Si ya hay un registro con esta combinación de <namespace>:<table_name> <row_Id> y <column_family>:<column>, se agregará un segundo valor como el más actualizado, manteniendo una copia de seguridad del antiguo. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "get <namespace>?:<table_name> <row_Id> [ <column_family>:<column> ]?":"Devuelve la fila que coincida con el row_id dado. Se pueden especificar las columnas que se deben devolver, con su column family respectivo. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "scan <namespace>?:<table_name>": "Devuelve todas las filas de la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "delete <namespace>?:<table_name> <row_Id> <column_family>:<column> <timestamp>":"Elimina la fila que coincida con todos los parámetros. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "deleteall <namespace>?:<table_name> <row_Id>":"Elimina todas las filas con el row_Id indicado. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "count <namespace>?:<table_name>": "Cuenta la cantidad de filas en la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
-                "truncate <namespace>?:<table_name>": "Elimina todo el contenido de la tabla, manteniendo la estructura básica. Si no se especifica el namespace, se tomará el namespace 'default'."
-            }
+            'create_namespace <namespace>': "DDL => Crea un nuevo namespace en el directorio.",
+            'list_namespaces': "DDL => Lista todos los namespaces disponibles.",
+            'create <namespace>?:<table_name> [column_families]': "DDL => Crea una nueva tabla con los column families descritos en el namespace indicado. Si no se especifica ningún namespace, se utiliza el 'default'.",
+            'list [<namespace>?:regex]?': "DDL => Lista todas las tablas que coincidan con los parámetros dados. Si se especifica una regex, listará todas las tablas que coincidan. Si no se especifica el nombre del namespace, se buscará en el namespace 'default'.",
+            'disable <namespace>?:<table_name>': "DDL => Deshabilita la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            'enable <namespace>?:<table_name>': "DDL => Habilita la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            'is_enabled <namespace>?:<table_name>': "DDL => Verifica el estado de la tabla descrita. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "alter <namespace>?:<table_name> {NAME => <column_family>, [METHOD => 'add' | 'delete']?}": "DDL => Modifica la tabla descrita. El método 'add' añade el column family a la tabla, mientras que el método 'delete' la elimina de la tabla, así como todos los registros asignados a ella. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "drop <namespace>?:<table_name>": "DDL => Elimina la tabla descrita y todo su contenido. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "drop_all [<namespace>?:regex]?": "DDL => Elimina todas las tablas que coincidan con los parámetros dados. Si se especifica una regex, eliminará las tablas que coincidan. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "describe <namespace>?:<table_name>": "DDL => Proporciona una breve descripción de la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "put <namespace>?:<table_name> <row_Id> <column_family>:<column> <value>": "DML => Crea un nuevo registro dentro de la tabla y columna indicadas, con el row_Id dado y el nuevo valor. Si ya hay un registro con esta combinación de <namespace>:<table_name> <row_Id> y <column_family>:<column>, se agregará un segundo valor como el más actualizado, manteniendo una copia de seguridad del antiguo. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "get <namespace>?:<table_name> <row_Id> [<column_family>:<column>]?": "DML => Devuelve la fila que coincida con el row_id dado. Se pueden especificar las columnas que se deben devolver, con su column family respectivo. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "scan <namespace>?:<table_name>": "DML => Devuelve todas las filas de la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "delete <namespace>?:<table_name> <row_Id> <column_family>:<column> <timestamp>": "DML => Elimina la fila que coincida con todos los parámetros. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "deleteall <namespace>?:<table_name> <row_Id>": "DML => Elimina todas las filas con el row_Id indicado. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "count <namespace>?:<table_name>": "DML => Cuenta la cantidad de filas en la tabla indicada. Si no se especifica el namespace, se tomará el namespace 'default'.",
+            "truncate <namespace>?:<table_name>": "DML => Elimina todo el contenido de la tabla, manteniendo la estructura básica. Si no se especifica el namespace, se tomará el namespace 'default'."
         }
         
-        if not command:
-            result += f'Para obtener más información acerca de un comando específico, escriba HELP seguido del nombre de comando\n'
-            
-            headers = ['\033[32mCOMANDO\033[0m','\033[32mDESCRIPCIÓN\033[0m']
-            
-            for c_type in helps.items():
-                result += f'   {c_type[0]}:\n'
-                data = []
-                for c in c_type[1].items():
-                    data.append([f'\033[96m{c[0]}\033[0m',c[1].split('.')[0]+'.'])
-                    
-                result += tabulate(data, headers=headers, tablefmt="plain")
-                result += '\n'
+        if command:
+            for c in helps.items():
+                if command == c[0].split(' ')[0]: return f'{c[0]}\n\n{c[1]}'
+            result += f"\033[91mEl comando '{command}' no es válido\033[0m\n\n"
         
-        else:
-            for c_type in helps.values():
-                for c in c_type.items():
-                    if command == c[0].split(' ')[0]: return f'{c[0]}\n\n{c[1]}'
-            return f"El comando '{command}' no es válido."
+        result += f'Para obtener más información acerca de un comando específico, escriba HELP seguido del nombre de comando\n'
         
+        headers = ['\033[32mCOMANDO\033[0m','\033[32mDESCRIPCIÓN\033[0m']
+        
+        maxWidthDesc = 90
+        maxWidthComm = 70
+        
+        data = []
+        for c in helps.items():
+            data.append([f'\033[96m{c[0].upper()}\033[0m','\033[0m'+c[1].split('.')[0]+'.'])
+            data.append([' ',' '])
+                
+        for i in range(len(data)):
+            command, description = data[i]
+            if len(description) > maxWidthDesc:
+                wrapped_description = '\n       '.join(textwrap.wrap(description, maxWidthDesc))
+                data[i][1] = wrapped_description
+            if len(command) > maxWidthComm:
+                wrapped_command = '\n\033[96m'.join(textwrap.wrap(command, maxWidthComm))
+                data[i][0] = wrapped_command
+            
+        result += '\n'
+        result += tabulate(data, headers=headers, tablefmt="plain")
         return result
