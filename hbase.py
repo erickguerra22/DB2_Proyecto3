@@ -768,7 +768,7 @@ class HBase:
                 wrapped_description = '\n       '.join(textwrap.wrap(description, maxWidthDesc))
                 data[i][1] = wrapped_description
             if len(command) > maxWidthComm:
-                wrapped_command = '\n\033[96m'.join(textwrap.wrap(command, maxWidthComm))
+                wrapped_command = '\n     \033[96m'.join(textwrap.wrap(command, maxWidthComm))
                 data[i][0] = wrapped_command
             
         result += '\n'
