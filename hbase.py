@@ -268,7 +268,8 @@ class HBase:
                 data = file_content['data']
 
                 for _,v in data.items():
-                    v.pop(cf)
+                    if cf in v:
+                        v.pop(cf)
             with open(full_path, 'w') as f:
                 json.dump(file_content, f, indent=4)
 
@@ -649,7 +650,7 @@ class HBase:
                     for col in columns.items():
                         rows += len(col[1])
                     # rows += len(columns)
-                r[rowId] = {}
+                r.pop(rowId)
                 with open(file_path, 'w') as f:
                         json.dump(hfile, f, indent=2)
             continue
