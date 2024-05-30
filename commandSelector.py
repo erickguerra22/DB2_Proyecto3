@@ -1,3 +1,5 @@
+import re
+
 def commandSelector(hbase,command):    
     if '{' in command:
         parts = command.split('{')
@@ -44,7 +46,12 @@ def commandSelector(hbase,command):
             return hbase.putRow(parts[1], parts[2], parts[3], value)
         elif command == 'get':
             families = parts[3:] if len(parts) > 3 else None
-            return hbase.getData(parts[1], parts[2], families)
+            timestamp = None
+            timestampREGEX = r'^[0-9]+\.[0-9]+$'
+            if families and re.match(timestampREGEX,families[-1]):
+                timestamp = families[-1]
+                families.remove(timestamp)
+            return hbase.getData(parts[1], parts[2], families, timestamp)
         elif command == 'scan':
             limit = int(parts[2]) if len(parts) > 2 else None
             offset = int(parts[3]) if len(parts) > 3 else None

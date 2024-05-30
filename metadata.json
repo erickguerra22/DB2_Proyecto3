@@ -15,6 +15,13 @@
             "enabled": true,
             "region": 1
         },
+        "test": {
+            "families": [
+                "cf_1"
+            ],
+            "enabled": true,
+            "region": 4
+        },
         "usuarios": {
             "families": [
                 "info_contacto",
@@ -32,5 +39,6 @@
             "enabled": true,
             "region": 3
         }
-    }
+    },
+    "namespace1": {}
 }

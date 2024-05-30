@@ -247,7 +247,13 @@ class HBase:
                 table[2].append(cf)
         if action == 'delete':
             if cf in table[2]:
+                table[2].remove(cf)        
+        if action == 'modify':
+            newCF = actions.get('NEW') if 'NEW' in actions.keys() else cf
+            if cf in table[2]:
                 table[2].remove(cf)
+                table[2].append(newCF)
+
 
         self.writeMetadata()
         result += 'Updating all files with the new schema...\n'
@@ -269,6 +275,16 @@ class HBase:
 
                 for _,v in data.items():
                     if cf in v:
+                        v.pop(cf)
+            if action == 'modify' and cf in file_content['metadata']['column_families']:
+                newCF = actions.get('NEW') if 'NEW' in actions.keys() else cf
+                file_content['metadata']['column_families'].append(newCF)
+                file_content['metadata']['column_families'].remove(cf)
+                data = file_content['data']
+
+                for _,v in data.items():
+                    if cf in v:
+                        v[newCF] = v[cf]
                         v.pop(cf)
             with open(full_path, 'w') as f:
                 json.dump(file_content, f, indent=4)
@@ -431,7 +447,7 @@ class HBase:
             else:
                 hfile['data'][rowId] = {cf: {column: {timestamp: value}}}
             
-        if len(hfile['data'][rowId][cf][column]) == 3:
+        if len(hfile['data'][rowId][cf][column]) == 4:
             hfile['data'][rowId][cf][column].popitem()
             
         hfile['data'] = {k: hfile['data'][k] for k in sorted(hfile['data'], key=int)}
@@ -442,11 +458,13 @@ class HBase:
         return f'\033[95m{1} \033[96mrow\033[0m(s) in \033[95m{round(time() - inicio,6)} \033[0mseconds'
     
     
-    def getData(self, table, rowId, cols=None, filters=None):
+    def getData(self, table, rowId, cols=None, timestamp=None):
         resultMessage=''
         inicio = time()
         table = self.verifyTable(table)
         result = {}
+        cf = None
+        column = None
 
         if not isinstance(table,tuple):
             return table
@@ -459,14 +477,13 @@ class HBase:
         
         if cols:
             for col in cols:
-                if ':' not in col:
-                    return f"\033[91mERROR: Debe especificar el column family al que pertenece cada columna\033[0m"
-                
-                cf, column = col.split(':')
+                if ':' not in col: cf = col
+                else: cf, column = col.split(':')
 
                 if cf not in table[2]:
                     return f"\033[91mFamilyNotFoundException: La familia '{cf}' no existe en la tabla '{table[1]}'\033[0m"
-                result[(cf,column)] = []
+                if ':' in col:
+                    result[(cf,column)] = []
             
         rows = []
         
@@ -490,9 +507,19 @@ class HBase:
                         for family, columns in families.items()
                         for column in columns.keys()
                     }
+                if cf and not column:
+                    result = {
+                        (family, column): {}
+                        for _, families in r.items()
+                        for family, columns in families.items()
+                        for column in columns.keys()
+                        if family == cf
+                    }
                 for c in result.keys():
                     if c[1] in r[rowId][c[0]].keys():
                         result[c] = r[rowId][c[0]][c[1]]
+                        if timestamp:
+                            result[c] = {k: v for k, v in result[c].items() if k == timestamp}
                     else:
                         result[c] = {}
                 continue
@@ -511,7 +538,8 @@ class HBase:
         return resultMessage
     
     def scanData(self, table, limit, offset):
-        offset = 0 if offset is None else offset
+        offset = 0 if offset is None else max(offset - 1, 0)
+        limit = 10 if limit is not None and limit <= 0 else limit
         resultMessage=''
         inicio = time()
         table = self.verifyTable(table)
@@ -667,9 +695,6 @@ class HBase:
         if len(table) == 2:
             return f"\033[91mTableNotFoundException: La tabla '{table[1]}' no existe en el namespace '{table[0]}'\033[0m" if not embedded else None
         
-        if not table[3]:
-            return f"\033[91mTableDisabledException: La tabla '{table[1]}' está deshabilitada.\033[0m" if not embedded else None
-        
         hfiles = {}
         
         table_path = os.path.join(f'namespaces/{table[0]}', table[1])
@@ -702,7 +727,7 @@ class HBase:
         if len(table) == 2:
             return f"\033[91mTableNotFoundException: La tabla '{table[1]}' no existe en el namespace '{table[0]}'\033[0m"
         
-        rows = self.countRows(table[1], embedded=True)
+        rows = self.countRows(f'{table[0]}:{table[1]}', embedded=True)
         if rows == None:
             return f"\033[91mCouldn't count {table[0]}:{table[1]} rows\033[0m\n"
         
