@@ -18,14 +18,16 @@
         "usuarios": {
             "families": [
                 "info_contacto",
-                "info_personal"
+                "info_personal",
+                "test"
             ],
             "enabled": true,
             "region": 0
         },
         "ventas": {
             "families": [
-                "info_venta"
+                "info_venta",
+                "info_vendedor"
             ],
             "enabled": true,
             "region": 3

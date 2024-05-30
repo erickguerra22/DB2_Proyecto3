@@ -434,7 +434,7 @@ class HBase:
         if len(hfile['data'][rowId][cf][column]) == 3:
             hfile['data'][rowId][cf][column].popitem()
             
-        hfile['data'] = {k: hfile['data'][k] for k in sorted(hfile['data'])}
+        hfile['data'] = {k: hfile['data'][k] for k in sorted(hfile['data'], key=int)}
 
         with open(file_path, 'w') as f:
             json.dump(hfile, f, indent=2)
